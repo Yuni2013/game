@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>버튼을 누르세요!</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+    padding: 10px;
+  }
+
+  h1 { font-size: 18px; margin: 10px 0; }
+
+  #rule {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 10px;
+  }
+
+  #timer { color: #f1c40f; }
+
+  #info, #best, #message {
+    font-size: 13px;
+    margin: 5px;
+  }
+
+  #buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    max-width: 420px;
+    margin: 15px auto;
+  }
+
+  button {
+    flex: 1 1 calc(20% - 10px);
+    min-width: 70px;
+    height: 70px;
+    border: none;
+    border-radius: 12px;
+    font-size: 11px;
+  }
+
+  #start {
+    padding: 12px;
+    width: 80%;
+    max-width: 300px;
+    color: black;
+    font-weight: bold;
+    background: #fff;
+    border-radius: 10px;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>버튼을 누르세요!<h1>
+
+<div id="rule">시작 버튼을 누르세요</div>
+<div id="timer">시간: 0</div>
+
+<div id="info">점수: 0 | 버튼: 1</div>
+<div id="best">최고 기록: 0</div>
+<div id="message"></div>
+
+<div id="buttons"></div>
+
+<button id="start">게임 시작</button>
+
+<script>
+
+const colors = [
+  {name:"red", label:"빨강"},
+  {name:"blue", label:"파랑"},
+  {name:"green", label:"초록"},
+  {name:"yellow", label:"노랑"},
+  {name:"orange", label:"주황"},
+  {name:"purple", label:"보라"},
+  {name:"pink", label:"분홍"},
+  {name:"brown", label:"갈색"},
+  {name:"cyan", label:"하늘색"},
+  {name:"lime", label:"연두"},
+  {name:"navy", label:"남색"},
+  {name:"olive", label:"올리브"},
+  {name:"gold", label:"금색"},
+  {name:"silver", label:"은색"},
+  {name:"black", label:"검정"},
+  {name:"white", label:"흰색"},
+  {name:"teal", label:"청록색"},
+  {name:"coral", label:"산호색"},
+  {name:"indigo", label:"남보라"},
+  {name:"maroon", label:"와인색"}
+];
+
+function isLightColor(name) {
+  return ["white","yellow","lime","silver","cyan","gold"].includes(name);
+}
+
+let score = 0;
+let maxButtons = 1;
+let baseTime = 3;
+let time = 3;
+
+let timer = null;
+let gameRunning = false;
+let locked = false;
+
+let targetColor = null;
+let forbiddenColor = null;
+let noClickMode = false;
+
+const ruleEl = document.getElementById("rule");
+const timerEl = document.getElementById("timer");
+const infoEl = document.getElementById("info");
+const bestEl = document.getElementById("best");
+const msgEl = document.getElementById("message");
+const buttonsEl = document.getElementById("buttons");
+const startBtn = document.getElementById("start");
+
+let bestScore = Number(localStorage.getItem("bestScore") || 0);
+bestEl.textContent = "최고 기록: " + bestScore;
+
+function updateSpeed() {
+  baseTime = Math.max(0.8, 3 - Math.max(0, maxButtons - 10) * 0.2);
+}
+
+function startTimer() {
+  clearInterval(timer);
+
+  time = baseTime;
+
+  timer = setInterval(() => {
+    if (!gameRunning) return;
+
+    time -= 0.1;
+    timerEl.textContent = "시간: " + time.toFixed(2);
+
+    if (time <= 0) {
+      if (noClickMode) {
+        success();
+      } else {
+        fail("시간 초과!");
+      }
+    }
+  }, 100);
+}
+
+function pickCommand() {
+  targetColor = null;
+  forbiddenColor = null;
+  noClickMode = false;
+
+  const visible = [];
+  for (let i = 0; i < maxButtons; i++) {
+    visible.push(colors[i % colors.length]);
+  }
+
+  const pick = visible[Math.floor(Math.random() * visible.length)];
+  const r = Math.random();
+
+  const canForbidden = maxButtons > 1;
+
+  if (r < 0.4) {
+    targetColor = pick;
+    ruleEl.textContent = pick.label + " 버튼을 누르세요";
+  } else if (r < 0.7) {
+    noClickMode = true;
+    ruleEl.textContent = "버튼을 누르지 마세요";
+  } else if (canForbidden) {
+    forbiddenColor = pick;
+    ruleEl.textContent = pick.label + " 버튼을 누르지 마세요";
+  } else {
+    targetColor = pick;
+    ruleEl.textContent = pick.label + " 버튼을 누르세요";
+  }
+
+  msgEl.textContent = "";
+}
+
+function renderButtons() {
+  buttonsEl.innerHTML = "";
+
+  for (let i = 0; i < maxButtons; i++) {
+    const color = colors[i % colors.length];
+
+    const btn = document.createElement("button");
+
+    let bg = color.name === "gold" ? "#b8860b" : color.name;
+
+    btn.style.background = bg;
+    btn.style.color = isLightColor(color.name) ? "black" : "white";
+
+    btn.textContent = color.label;
+
+    btn.onclick = () => handleClick(color);
+
+    buttonsEl.appendChild(btn);
+  }
+}
+
+function handleClick(color) {
+  if (!gameRunning || locked) return;
+
+  if (forbiddenColor) {
+    if (color.name === forbiddenColor.name) {
+      fail("잘못된 버튼을 눌렀습니다");
+    } else {
+      success();
+    }
+    return;
+  }
+
+  if (noClickMode) {
+    fail("버튼을 눌렀습니다");
+    return;
+  }
+
+  if (targetColor) {
+    if (color.name === targetColor.name) {
+      success();
+    } else {
+      fail("잘못된 버튼을 눌렀습니다");
+    }
+  }
+}
+
+function nextRound() {
+  if (score > 0 && score % 2 === 0 && maxButtons < 20) {
+    maxButtons++;
+  }
+
+  updateSpeed();
+  renderButtons();
+  pickCommand();
+  startTimer();
+
+  infoEl.textContent = `점수: ${score} | 버튼: ${maxButtons}`;
+}
+
+function success() {
+  if (locked) return;
+  locked = true;
+
+  clearInterval(timer);
+  score++;
+
+  setTimeout(() => {
+    locked = false;
+    nextRound();
+  }, 100);
+}
+
+function fail(text) {
+  if (locked) return;
+  locked = true;
+
+  clearInterval(timer);
+  gameRunning = false;
+
+  msgEl.style.color = "#e74c3c";
+  msgEl.textContent = "✖ " + text;
+
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem("bestScore", bestScore);
+    bestEl.textContent = "최고 기록: " + bestScore;
+  }
+
+  ruleEl.textContent = "게임 오버!";
+  startBtn.style.display = "inline-block";
+
+  setTimeout(() => {
+    locked = false;
+  }, 200);
+}
+
+startBtn.onclick = () => {
+  score = 0;
+  maxButtons = 1;
+  baseTime = 3;
+  gameRunning = true;
+
+  startBtn.style.display = "none";
+
+  msgEl.textContent = "";
+  nextRound();
+};
+
+</script>
+
+</body>
+</html>
