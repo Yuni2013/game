@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>버튼 게임</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #111;
+  color: white;
+  text-align: center;
+  padding: 10px;
+}
+
+h1 { font-size: 18px; margin: 10px 0; }
+
+#ruleText {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 10px;
+}
+
+#timerText { color: #f1c40f; }
+
+#gameInfo, #bestScoreText, #messageText {
+  font-size: 13px;
+  margin: 5px;
+}
+
+#buttonContainer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 420px;
+  margin: 15px auto;
+}
+
+button {
+  flex: 1 1 calc(20% - 10px);
+  min-width: 70px;
+  height: 70px;
+  border: none;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+#startButton {
+  padding: 12px;
+  width: 80%;
+  max-width: 300px;
+  color: black;
+  font-weight: bold;
+  background: #fff;
+  border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>버튼을 누르세요!</h1>
+
+<div id="ruleText">시작 버튼을 누르세요</div>
+<div id="timerText">시간: 0</div>
+
+<div id="gameInfo">점수: 0 | 버튼: 1</div>
+<div id="bestScoreText">최고 기록: 0</div>
+<div id="messageText"></div>
+
+<div id="buttonContainer"></div>
+
+<button id="startButton">게임 시작</button>
+
+<script>
+
+const buttonColors = [
+  {name:"#ff0000", label:"빨강"},
+  {name:"#0000ff", label:"파랑"},
+  {name:"#008000", label:"초록"},
+  {name:"#ffff00", label:"노랑"},
+  {name:"#ff8c00", label:"주황"},
+  {name:"#800080", label:"보라"},
+  {name:"#ff69b4", label:"분홍"},
+  {name:"#8b4513", label:"갈색"},
+  {name:"#00ffff", label:"하늘색"},
+  {name:"#7fff00", label:"연두"},
+  {name:"#000080", label:"남색"},
+  {name:"#808000", label:"올리브"},
+  {name:"#ffd700", label:"금색"},
+  {name:"#c0c0c0", label:"은색"},
+  {name:"#000000", label:"검정"},
+  {name:"#ffffff", label:"흰색"},
+  {name:"#008080", label:"청록"},
+  {name:"#ff7f50", label:"산호"},
+  {name:"#4b0082", label:"남보라"},
+  {name:"#800000", label:"와인"},
+  {name:"#dc143c", label:"진홍"},
+  {name:"#ff1493", label:"핫핑크"},
+  {name:"#ffb6c1", label:"연분홍"},
+  {name:"#e9967a", label:"연산호"},
+  {name:"#ffa07a", label:"살구"},
+  {name:"#cd853f", label:"황갈"},
+  {name:"#daa520", label:"황금"},
+  {name:"#f0e68c", label:"카키"},
+  {name:"#98fb98", label:"연초록"},
+  {name:"#32cd32", label:"라임그린"},
+  {name:"#2e8b57", label:"바다초록"},
+  {name:"#20b2aa", label:"연청록"},
+  {name:"#40e0d0", label:"터키석"},
+  {name:"#87ceeb", label:"스카이"},
+  {name:"#4682b4", label:"강철파랑"},
+  {name:"#1e90ff", label:"도저블루"},
+  {name:"#4169e1", label:"로열블루"},
+  {name:"#6a5acd", label:"슬레이트블루"},
+  {name:"#9370db", label:"중간보라"},
+  {name:"#ba55d3", label:"난초"},
+  {name:"#dda0dd", label:"자두"},
+  {name:"#a0522d", label:"황토"},
+  {name:"#d2691e", label:"초콜릿"},
+  {name:"#bc8f8f", label:"장밋빛갈색"},
+  {name:"#708090", label:"슬레이트회색"},
+  {name:"#778899", label:"밝은회색"},
+  {name:"#2f4f4f", label:"짙은회청"},
+  {name:"#696969", label:"짙은회색"},
+  {name:"#b0c4de", label:"연강철"},
+  {name:"#f5deb3", label:"밀색"}
+];
+
+function isLightColor(hex) {
+  return [
+    "#ffffff","#ffff00","#ffd700","#c0c0c0","#7fff00",
+    "#ffb6c1","#ffa07a","#f0e68c","#98fb98","#40e0d0",
+    "#87ceeb","#dda0dd","#b0c4de","#f5deb3","#00ffff"
+  ].includes(hex.toLowerCase());
+}
+
+let currentScore = 0;
+let buttonCount = 1;
+let roundTime = 3;
+let remainingTime = 3;
+
+let timerId = null;
+let gameRunning = false;
+let lockInput = false;
+
+let targetColor = null;
+let forbiddenColor = null;
+let noClickMode = false;
+
+const ruleText = document.getElementById("ruleText");
+const timerText = document.getElementById("timerText");
+const gameInfo = document.getElementById("gameInfo");
+const bestScoreText = document.getElementById("bestScoreText");
+const messageText = document.getElementById("messageText");
+const buttonContainer = document.getElementById("buttonContainer");
+const startButton = document.getElementById("startButton");
+
+let bestScore = Number(localStorage.getItem("bestScore") || 0);
+bestScoreText.textContent = "최고 기록: " + bestScore;
+
+function updateDifficulty() {
+  roundTime = Math.max(0.8, 3 - Math.max(0, buttonCount - 10) * 0.2);
+}
+
+function startTimer() {
+  clearInterval(timerId);
+
+  remainingTime = roundTime;
+
+  timerId = setInterval(() => {
+    if (!gameRunning) return;
+
+    remainingTime -= 0.1;
+    timerText.textContent = "시간: " + remainingTime.toFixed(2);
+
+    if (remainingTime <= 0) {
+      if (noClickMode) successRound();
+      else endGame("시간 초과!");
+    }
+  }, 100);
+}
+
+function createMission() {
+  targetColor = null;
+  forbiddenColor = null;
+  noClickMode = false;
+
+  const visible = [];
+  for (let i = 0; i < buttonCount; i++) {
+    visible.push(buttonColors[i % buttonColors.length]);
+  }
+
+  const pick = visible[Math.floor(Math.random() * visible.length)];
+  const r = Math.random();
+
+  const canForbidden = buttonCount > 1;
+
+  if (r < 0.4) {
+    targetColor = pick;
+    ruleText.textContent = pick.label + " 버튼을 누르세요";
+  } else if (r < 0.7) {
+    noClickMode = true;
+    ruleText.textContent = "버튼을 누르지 마세요";
+  } else if (canForbidden) {
+    forbiddenColor = pick;
+    ruleText.textContent = pick.label + " 버튼을 누르지 마세요";
+  } else {
+    targetColor = pick;
+    ruleText.textContent = pick.label + " 버튼을 누르세요";
+  }
+
+  messageText.textContent = "";
+}
+
+function drawButtons() {
+  buttonContainer.innerHTML = "";
+
+  for (let i = 0; i < buttonCount; i++) {
+    const color = buttonColors[i % buttonColors.length];
+
+    const btn = document.createElement("button");
+    btn.style.background = color.name;
+    btn.style.color = isLightColor(color.name) ? "black" : "white";
+    btn.textContent = color.label;
+
+    btn.onclick = () => checkButton(color);
+
+    buttonContainer.appendChild(btn);
+  }
+}
+
+function checkButton(color) {
+  if (!gameRunning || lockInput) return;
+
+  if (forbiddenColor) {
+    if (color.name === forbiddenColor.name) return endGame("금지된 버튼");
+    return successRound();
+  }
+
+  if (noClickMode) return endGame("버튼을 눌렀습니다");
+
+  if (targetColor) {
+    if (color.name === targetColor.name) successRound();
+    else endGame("잘못된 버튼");
+  }
+}
+
+function startRound() {
+  if (currentScore > 0 && currentScore % 2 === 0 && buttonCount < 50) {
+    buttonCount++;
+  }
+
+  updateDifficulty();
+  drawButtons();
+  createMission();
+  startTimer();
+
+  gameInfo.textContent = `점수: ${currentScore} | 버튼: ${buttonCount}`;
+}
+
+function successRound() {
+  if (lockInput) return;
+  lockInput = true;
+
+  clearInterval(timerId);
+  currentScore++;
+
+  setTimeout(() => {
+    lockInput = false;
+    startRound();
+  }, 100);
+}
+
+function endGame(text) {
+  if (lockInput) return;
+  lockInput = true;
+
+  clearInterval(timerId);
+  gameRunning = false;
+
+  messageText.style.color = "#e74c3c";
+  messageText.textContent = "✖ " + text;
+
+  if (currentScore > bestScore) {
+    bestScore = currentScore;
+    localStorage.setItem("bestScore", bestScore);
+    bestScoreText.textContent = "최고 기록: " + bestScore;
+  }
+
+  ruleText.textContent = "게임 오버!";
+  startButton.style.display = "inline-block";
+
+  setTimeout(() => lockInput = false, 200);
+}
+
+startButton.onclick = () => {
+  currentScore = 0;
+  buttonCount = 1;
+  roundTime = 3;
+  gameRunning = true;
+
+  startButton.style.display = "none";
+  messageText.textContent = "";
+
+  startRound();
+};
+
+</script>
+
+</body>
+</html>
